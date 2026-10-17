@@ -10,6 +10,10 @@
   const damp = (k, dt) => 1 - Math.exp(-k * dt);
   const PI = Math.PI;
   const HOOP = { x: -8.6, y: 3.0, z: -2.6 };
+  const SIDE_COLOR = ['#8cc2ff', '#ffb0b0'];
+  const TREATS = [['🍦', 'ICE CREAM'], ['💧', 'WATER'], ['🧃', 'JUICE BOX'], ['🍪', 'COOKIE'], ['🍉', 'WATERMELON'], ['🍌', 'BANANA']];
+  const BUD_REST = 240; // frames a companion rests after a visit (4 s), in 2P and against the Normal CPU
+  const BUD_REST_EASY = 30; // a player facing the Easy CPU can call him right back
   const store = {
     get(k, d) {
       try {
@@ -69,10 +73,33 @@
     };
   }
 
+  // The companion (the other brother) for one side: built at his buddy size, with a name tag in his caller's colour.
+  function buildBud(side, id, alt) {
+    const entry = Kit.roster.get(id);
+    const person = Kit.people.build(alt ? altLook(entry.look) : entry.look);
+    person.root.scale.setScalar(entry.buddyScale || 0.8);
+    person.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    person.root.visible = false;
+    scene.add(person.root);
+    const tag = Kit.gfx.nameTag(entry.name, SIDE_COLOR[side]);
+    tag.scale.multiplyScalar(0.5);
+    tag.renderOrder = 15;
+    tag.visible = false;
+    scene.add(tag);
+    const treat = new T.Sprite(new T.SpriteMaterial({ depthWrite: false }));
+    treat.visible = false;
+    scene.add(treat);
+    return { id, entry, person, tag, u: side === 0 ? 1 : -1, treat, flyT: -1, holdT: 0, from: new T.Vector3() };
+  }
+
   function clearFighters() {
     for (const f of fighters) {
       scene.remove(f.person.root, f.ffx.dizzy, f.ffx.ball);
       if (f.tag) scene.remove(f.tag);
+      if (f.bud) {
+        scene.remove(f.bud.person.root, f.bud.tag, f.bud.treat);
+        if (f.bud.treat.parent) f.bud.treat.parent.remove(f.bud.treat);
+      }
     }
     fighters = [];
   }
@@ -82,10 +109,12 @@
     clearFighters();
     FX.clear();
     const mods = who.map((b) => (C.LEVELS[b] ? C.modsFor(b) : { dmg: 1, walk: 1 }));
-    M = F.create({ chars, mods });
+    const rest = who.map((b, side) => (b === 'human' && who[side ^ 1] === 'easy' ? BUD_REST_EASY : BUD_REST));
+    M = F.create({ chars, mods, buddyRest: rest });
     brains = who.map((b, side) => (b === 'human' ? () => I.snapshot(side) : C.brain(b)));
     const labels = attract ? [null, null] : who.map((b, side) => (b === 'human' ? (G.mode === '2p' ? `${side + 1}P` : '1P') : 'CPU'));
     fighters = chars.map((id, side) => buildFighter(id, side, side === 1 && chars[0] === chars[1], labels[side]));
+    fighters.forEach((fv, side) => { fv.bud = buildBud(side, M.f[side].bud.id, side === 1 && M.f[0].bud.id === M.f[1].bud.id); });
     G.attract = !!attract;
     G.slowT = 0;
     G.acc = 0;
@@ -200,8 +229,26 @@
           sound(() => S.special(e.special));
           break;
         case 'spawn':
-          if (e.kind === 'peace') FX.stars(e.x, e.y + 0.4, 8);
-          if (e.kind === 'ball') sound(() => S.whoosh(false));
+          if (e.kind === 'peace' || e.kind === 'bpeace') FX.stars(e.x, e.y + 0.4, e.bud ? 5 : 8);
+          if (e.kind === 'ball' || e.kind === 'bball') sound(() => S.whoosh(false));
+          if (e.kind === 'bpeace') sound(() => S.special('peace'));
+          break;
+        case 'buddy': {
+          const name = Kit.roster.get(e.id).name;
+          if (e.what === 'call') {
+            if (!G.attract) callout(e.side, `${name}'S HERE!`);
+            sound(() => S.buddy());
+          } else if (e.what === 'resting' && !G.attract) nudge(e.side);
+          break;
+        }
+        case 'saved':
+          FX.block(e.x, e.y);
+          stage.cheer(false);
+          if (!G.attract) callout(e.side, e.id === 'tommy' ? 'TOMMY BLOCKED IT!' : `${Kit.roster.get(e.id).name} SAVED YOU!`);
+          sound(() => S.block());
+          break;
+        case 'treat':
+          giveTreat(e.side);
           break;
         case 'clash':
           FX.clash(e.x, e.y);
@@ -276,6 +323,7 @@
           fv.tag.position.set(f.x, f.y + 2.55, 0);
         }
         if (f.state === 'win') celebrate(fv, f, dt);
+        renderBud(fv, f, dt);
         if (f.state === 'attack' && f.move.dash && f.mt > f.move.dash[0] && f.mt <= f.move.dash[1] && Math.random() < dt * 30) FX.dust(f.x - f.facing * 0.4, 1);
       }
       FX.syncProjectiles(M.proj, dt, G.time);
@@ -286,6 +334,81 @@
     FX.update(dt);
     stage.update(dt, G.time);
     renderer.render(scene, camera);
+  }
+
+  // The companion: runs in and out, strikes his signature poses, cheers when he saves his fighter.
+  function renderBud(fv, f, dt) {
+    const bv = fv.bud, b = f.bud, p = bv.person;
+    updateTreat(fv, dt);
+    p.root.visible = bv.tag.visible = b.on;
+    if (!b.on) return;
+    const k = damp(18, dt);
+    const moving = b.act === 'enter' || b.act === 'return' || b.act === 'leave';
+    let mode = bv.id === 'teddy' ? 'guard' : 'idle', ph = G.time * 6;
+    if (moving) {
+      mode = 'run';
+      ph = G.time * 14;
+    } else if (b.act === 'give') mode = 'give';
+    else if (b.act === 'move') {
+      const mv = F.BUD_MOVES[b.move];
+      if (mv.dash) {
+        const at = b.arrive < 0 ? -1 : b.actT - b.arrive;
+        mode = at < 0 ? 'run' : at < mv.strikes[1].at - 1 ? 'jab' : at < mv.len - 8 ? 'straight' : 'guard';
+        ph = G.time * 16;
+      } else mode = b.move;
+    } else if (b.cheer > 0) {
+      mode = Kit.roster.signature(bv.entry, 'hello'); // he just saved you
+      ph = G.time * 6;
+    }
+    Kit.people.pose(p, ph, mode, k);
+    const toCam = mode === 'peace' ? 0.6 : 1;
+    bv.u += (b.facing * toCam - bv.u) * damp(12, dt);
+    p.root.rotation.y = -PI + (PI / 2 - 0.3) * bv.u;
+    p.root.position.set(b.x, b.y, -0.9);
+    bv.tag.position.set(b.x, b.y + (bv.entry.buddyScale || 0.8) * 2.2 + 0.35, -0.9);
+    if (b.act === 'move' && F.BUD_MOVES[b.move].dash && b.arrive < 0 && Math.random() < dt * 25) FX.dust(b.x, 1);
+  }
+
+  // Halfway through a visit he tosses his fighter a treat, who holds it for a while (just for fun).
+  function giveTreat(side) {
+    const fv = fighters[side], bv = fv.bud;
+    const [emoji, label] = TREATS[Math.floor(Math.random() * TREATS.length)];
+    bv.treat.material.map = Kit.gfx.emojiTexture(emoji);
+    bv.treat.material.needsUpdate = true;
+    if (bv.treat.parent !== scene) scene.add(bv.treat);
+    bv.person.root.updateMatrixWorld(true);
+    Kit.people.handWorld(bv.person, 1, bv.from);
+    bv.treat.position.copy(bv.from);
+    bv.treat.scale.setScalar(0.5);
+    bv.treat.visible = true;
+    bv.flyT = 0;
+    if (!G.attract) {
+      callout(side, `${emoji} ${label} FROM ${bv.entry.name}!`);
+      Kit.sound.coin(4);
+    }
+  }
+
+  const handPos = new T.Vector3();
+  function updateTreat(fv, dt) {
+    const bv = fv.bud;
+    if (bv.flyT >= 0) {
+      bv.flyT += dt / 0.55;
+      fv.person.root.updateMatrixWorld(true);
+      fv.person.armR.localToWorld(handPos.set(0, -0.72, 0));
+      const u = Math.min(1, bv.flyT);
+      bv.treat.position.lerpVectors(bv.from, handPos, u);
+      bv.treat.position.y += Math.sin(u * PI) * 1.0;
+      if (u >= 1) {
+        bv.flyT = -1;
+        bv.holdT = 5;
+        fv.person.armR.add(bv.treat);
+        bv.treat.position.set(0.14, -0.8, 0.22);
+        bv.treat.scale.setScalar(0.5);
+      }
+    } else if (bv.holdT > 0 && (bv.holdT -= dt) <= 0) {
+      bv.treat.visible = false;
+      scene.add(bv.treat);
+    }
   }
 
   // Teddy's victory jump shots go into his backyard hoop; Tommy's Y throws ✌️ and stars.
@@ -361,9 +484,26 @@
       el.who.textContent = G.mode === '2p' ? `${side + 1}P` : side === 0 ? '1P' : `CPU · ${G.level.toUpperCase()}`;
       ui.combo[side].classList.remove('show');
       ui.call[side].classList.remove('show');
+      const bid = fighters[side].bud.id;
+      el.budImg.src = portraits[bid] || '';
+      el.budKey.textContent = side === 0 ? 'T' : G.mode === '2p' ? '⏎' : 'CPU';
+      el.budWrap.title = `${Kit.roster.get(bid).name}: ${side === 0 ? 'press T' : G.mode === '2p' ? 'press Enter' : 'the computer calls him'}`;
     }
     updateWins();
     ui.touch.classList.toggle('hidden', !(isTouch && G.mode === '1p'));
+    const b0 = fighters[0].bud;
+    ui.budBtn.querySelector('img').src = portraits[b0.id] || '';
+    ui.budBtn.querySelector('small').textContent = b0.entry.name;
+  }
+
+  // "He's still resting": a little shake of his HUD bar (and the touch button).
+  function nudge(side) {
+    const els = [ui.p[side].budWrap].concat(side === 0 ? [ui.budBtn] : []);
+    for (const el of els) {
+      el.classList.remove('no');
+      void el.offsetWidth;
+      el.classList.add('no');
+    }
   }
 
   function updateWins() {
@@ -384,6 +524,17 @@
       const sp = 1 - f.cd / F.SPECIAL_CD;
       el.sp.style.width = clamp(sp, 0, 1) * 100 + '%';
       el.spWrap.classList.toggle('ready', f.cd === 0 && M.phase === 'fight');
+      // companion: time he keeps guarding, or how far he's rested
+      const b = f.bud;
+      const fill = b.on ? b.guardLeft / F.BUD.GUARD : b.rest > 0 ? 1 - b.rest / b.rest0 : 1;
+      el.bud.style.setProperty('--fill', clamp(fill, 0, 1));
+      el.budWrap.classList.toggle('on', b.on && b.guardLeft > 0);
+      el.budWrap.classList.toggle('rest', !b.on && b.rest > 0);
+      if (side === 0) {
+        ui.budBtn.classList.toggle('on', b.on && b.guardLeft > 0);
+        ui.budBtn.classList.toggle('rest', !b.on && b.rest > 0);
+        ui.budBtn.style.setProperty('--fill', clamp(fill, 0, 1));
+      }
     }
     const secs = Math.ceil(M.timer / 60);
     if (ui.timer.textContent !== String(secs)) ui.timer.textContent = secs;
@@ -415,7 +566,7 @@
   }
 
   const combo = (side, n) => pop(ui.combo[side], `${n} HITS!`, 1.1);
-  const callout = (side, name) => pop(ui.call[side], name + '!', 1.3);
+  const callout = (side, text) => pop(ui.call[side], /[!?]$/.test(text) ? text : text + '!', 1.3);
 
   // ---------------------------------------------------------------- screens
 
@@ -492,6 +643,12 @@
       v.name.textContent = shown ? name(shown) : '???';
       v.blurb.textContent = shown ? window.KofChars.get(shown).blurb : 'surprise!';
       v.box.classList.toggle('locked', !!G.picks[side]);
+      const pal = shown ? window.KofChars.buddy(shown).id : null;
+      v.pal.style.visibility = pal ? 'visible' : 'hidden';
+      if (pal) {
+        v.palImg.src = portraits[pal];
+        v.palName.textContent = Kit.roster.get(pal).name;
+      }
       v.who.textContent = G.mode === '2p' ? `${side + 1}P` : side === 0 ? 'YOU' : `CPU · ${G.level.toUpperCase()}`;
     }
     ui.vsMid.classList.toggle('go', !!(G.picks[0] && G.picks[1]));
@@ -574,7 +731,7 @@
     }
     const youWon = G.mode === '1p' && w === 0;
     ui.resSub.textContent = G.mode === '2p' ? (w < 0 ? 'What a battle!' : `${w + 1}P is the backyard champion!`) : youWon ? 'You are the backyard champion!' : w < 0 ? 'Nobody won. Again?' : 'So close! Try again?';
-    const st = (f) => `${f.stats.hits} hits · best combo ${f.stats.maxCombo} · ${f.stats.specials} specials`;
+    const st = (f) => `${f.stats.hits} hits · best combo ${f.stats.maxCombo} · ${f.stats.specials} specials · ${f.stats.saves} saves by ${Kit.roster.get(f.bud.id).name}`;
     ui.resStats.innerHTML = `<div><b>${fighters[0].entry.name}</b> ${st(p0)}</div><div><b>${fighters[1].entry.name}</b> ${st(M.f[1])}</div>`;
     show('results');
     Kit.sound.music('over');
@@ -691,16 +848,20 @@
         root, face: root.querySelector('.face img'), name: root.querySelector('.nm'), who: root.querySelector('.who'),
         hp: root.querySelector('.hp .fill'), lag: root.querySelector('.hp .lag'), sp: root.querySelector('.sp b'), spWrap: root.querySelector('.sp'),
         wins: [...root.querySelectorAll('.wins i')], lagW: 100,
+        budWrap: root.querySelector('.bud'), bud: root.querySelector('.bud i'), budImg: root.querySelector('.bud img'), budKey: root.querySelector('.bud .k'),
       };
     });
     Object.assign(ui, {
       timer: $('timer'), round: $('roundNo'), banner: $('banner'), combo: [$('combo0'), $('combo1')], call: [$('call0'), $('call1')],
-      touch: $('touch'), selectTitle: $('selTitle'), vsMid: $('vsMid'),
+      touch: $('touch'), selectTitle: $('selTitle'), vsMid: $('vsMid'), budBtn: $('budBtn'),
       resTitle: $('resTitle'), resSub: $('resSub'), resFace: $('resFace'), resStats: $('resStats'),
     });
     ui.vs = [0, 1].map((side) => {
       const box = $('vs' + side);
-      return { box, img: box.querySelector('img'), name: box.querySelector('.nm'), blurb: box.querySelector('.bl'), who: box.querySelector('.who') };
+      return {
+        box, img: box.querySelector('img'), name: box.querySelector('.nm'), blurb: box.querySelector('.bl'), who: box.querySelector('.who'),
+        pal: box.querySelector('.pal'), palImg: box.querySelector('.pal img'), palName: box.querySelector('.pal b'),
+      };
     });
     const grid = $('cards');
     for (const e of ROSTER()) {
@@ -716,7 +877,7 @@
     r.innerHTML = '<span class="q">?</span><span class="nm">RANDOM</span><span class="tg t0">1P</span><span class="tg t1">2P</span>';
     grid.appendChild(r);
     ui.cards = [...grid.querySelectorAll('.card')];
-    I.bindTouch($('pad'), [...document.querySelectorAll('#touch .tb')]);
+    I.bindTouch($('pad'), [...document.querySelectorAll('#touch .tb'), $('budBtn')]);
   }
 
   async function boot() {
@@ -801,6 +962,8 @@
     // kof.freeze(true); kof.set(1, { state: 'ko', t: 99, koFall: true }); kof.step(1)
     freeze(on = true) { G.frozen = on; return on; },
     set(side, fields) { Object.assign(M.f[side], fields); return M.f[side].state; },
+    // Call a side's companion, as if T (P1) or Enter (P2) was pressed.
+    buddy(side = 0) { this.press(side, { c: true }); return M.f[side].bud.on; },
     // Let the CPU play a side (e.g. kof.cpu(0, 'normal') to watch two CPUs in a real match).
     cpu(side, level = 'normal') { brains[side] = C.brain(level); },
     debug(on = true) {

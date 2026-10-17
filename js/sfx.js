@@ -66,6 +66,11 @@
       }
     },
     swish() { S().swish(); },
+    // the companion arrives: a little run-in fanfare
+    buddy() {
+      [659, 784, 988].forEach((f, i) => S().tone({ type: 'triangle', f, dur: 0.14, vol: 0.12, at: i * 0.07 }));
+      S().hiss({ f: 1200, to: 3000, dur: 0.25, vol: 0.06 });
+    },
     click() { S().click(); },
     clash() {
       S().tone({ type: 'square', f: 1200, to: 400, dur: 0.12, vol: 0.06, lp: 3000 });

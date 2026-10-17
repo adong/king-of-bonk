@@ -1,19 +1,19 @@
 /* King of Bonk — controls: the keyboard for one or two players, and on-screen buttons for touch.
    Presses are latched until the engine's next frame reads them, so a tap shorter than one frame still counts.
-   P1: A D walk, W jump, S crouch, F punch, G kick, H special, T block (or hold back).
-   P2: arrows, J punch, K kick, L special, I block (numpad 1 2 3 0 work too).
+   P1: A D walk, W jump, S crouch, F punch, G kick, H special, R block (or hold back), T companion.
+   P2: arrows, J punch, K kick, L special, I block, Enter companion (numpad 1 2 3 0 work too).
    In 1-player mode both sets drive P1. */
 (function () {
   'use strict';
 
   const KEYS = {
     KeyA: [0, 'left'], KeyD: [0, 'right'], KeyW: [0, 'up'], KeyS: [0, 'down'],
-    KeyF: [0, 'p'], KeyG: [0, 'k'], KeyH: [0, 's'], KeyT: [0, 'block'],
+    KeyF: [0, 'p'], KeyG: [0, 'k'], KeyH: [0, 's'], KeyR: [0, 'block'], KeyT: [0, 'c'],
     ArrowLeft: [1, 'left'], ArrowRight: [1, 'right'], ArrowUp: [1, 'up'], ArrowDown: [1, 'down'],
-    KeyJ: [1, 'p'], KeyK: [1, 'k'], KeyL: [1, 's'], KeyI: [1, 'block'],
+    KeyJ: [1, 'p'], KeyK: [1, 'k'], KeyL: [1, 's'], KeyI: [1, 'block'], Enter: [1, 'c'], NumpadEnter: [1, 'c'],
     Numpad1: [1, 'p'], Numpad2: [1, 'k'], Numpad3: [1, 's'], Numpad0: [1, 'block'],
   };
-  const PRESS = { p: 1, k: 1, s: 1 };
+  const PRESS = { p: 1, k: 1, s: 1, c: 1 };
 
   // key sources: [player][source] so a key released on one set doesn't cancel the same action held on another
   const held = [{}, {}];
@@ -39,7 +39,7 @@
   // The input for one engine frame. Clears the latched presses it reports.
   function snapshot(side) {
     const srcs = side === 0 && !twoPlayer ? [0, 1] : [side];
-    const out = { left: false, right: false, up: false, down: false, block: false, p: false, k: false, s: false };
+    const out = { left: false, right: false, up: false, down: false, block: false, p: false, k: false, s: false, c: false };
     for (const s of srcs) {
       for (const a of ['left', 'right', 'up', 'down', 'block']) if (heldAct(s, a)) out[a] = true;
       for (const a in PRESS) {

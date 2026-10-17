@@ -25,10 +25,22 @@
     zombie: { walk: 0.75, power: 1.1, special: 'boo', specialName: 'BOO!', win: 'grab', blurb: '👻 BOO! scare' },
   };
 
+  // Each fighter's companion is the other brother (Kit.roster.buddyFor), with his signature moves for saying hello
+  // and goodbye (Kit.roster.signature). The fallbacks let the engine run headless without the kit.
+  const SIGNATURE = { teddy: ['boxing', 'jumpshot'], tommy: ['peace', 'peace'] };
+  function buddy(id) {
+    const R = window.Kit && window.Kit.roster;
+    const bid = R ? R.buddyFor(id) : id === 'tommy' ? 'teddy' : 'tommy';
+    const e = R && R.get(bid);
+    const sig = SIGNATURE[bid] || ['peace', 'peace'];
+    return { id: bid, hello: e ? R.signature(e, 'hello') : sig[0], bye: e ? R.signature(e, 'goodbye') : sig[1] };
+  }
+
   window.KofChars = {
     ids: Object.keys(CHARS),
     get(id) {
       return Object.assign({ id }, BASE, CHARS[id] || {});
     },
+    buddy,
   };
 })();

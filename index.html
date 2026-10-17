@@ -71,6 +71,23 @@
   .sp.ready b { background: linear-gradient(90deg, var(--yellow), #ff9f1c); }
   .sp.ready span { color: var(--ink); opacity: 1; }
   @keyframes ready { 50% { box-shadow: 0 0 12px rgba(255, 212, 0, 0.9); } }
+  /* the companion: his face, a bar for how long he keeps guarding (or how rested he is), and the key that calls him */
+  .bud { display: flex; align-items: center; gap: 5px; width: 62%; }
+  .right .bud { align-self: flex-end; flex-direction: row-reverse; }
+  .bud img { width: 24px; height: 24px; border-radius: 7px; border: 2px solid #fff; background: radial-gradient(circle at 50% 35%, #ffe2a0, #ff9f1c); object-fit: cover; }
+  .bud i { position: relative; flex: 1; height: 9px; border-radius: 5px; background: rgba(20, 18, 31, 0.6); border: 2px solid rgba(255, 255, 255, 0.7); overflow: hidden; --fill: 1; }
+  .bud i::after { content: ''; position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--fill)); background: linear-gradient(90deg, var(--yellow), #ff9f1c); }
+  .right .bud i::after { transform-origin: right; }
+  .bud .k { font: 800 10px/1 'Rubik', sans-serif; padding: 3px 5px; border-radius: 5px; background: #fff; color: var(--ink); }
+  .bud.on img { border-color: var(--yellow); box-shadow: 0 0 10px rgba(255, 212, 0, 0.95); animation: pulse 0.7s ease-in-out infinite; }
+  .bud.on i::after { background: linear-gradient(90deg, #9dff6a, #3fc22b); }
+  .bud.rest { opacity: 0.7; }
+  .bud.rest img { filter: grayscale(1); }
+  .bud.rest i::after { background: rgba(255, 255, 255, 0.55); }
+  .bud.rest .k { opacity: 0.4; }
+  .no { animation: nope 0.3s linear; }
+  @keyframes nope { 25% { translate: -4px 0; } 75% { translate: 4px 0; } }
+  @media (hover: none) and (pointer: coarse) { .bud .k { display: none; } }
   .mid { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   #timer {
     width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center;
@@ -152,11 +169,23 @@
   .tb.sp { background: linear-gradient(160deg, #d58cff, #8d3df0); }
   .tb.bl { background: linear-gradient(160deg, #7cd0ff, #2a7bd6); }
   .tb.down { transform: translateY(5px); box-shadow: 0 1px 0 var(--ink); filter: brightness(1.15); }
+  /* tap his face to call your brother; it glows while he guards and refills while he rests */
+  .budbtn {
+    position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 192px);
+    width: 84px; height: 84px; padding: 0; overflow: hidden; pointer-events: auto; --fill: 1;
+    background: conic-gradient(var(--yellow) calc(var(--fill) * 360deg), rgba(20, 18, 31, 0.6) 0); border-color: #fff;
+  }
+  .budbtn img { width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #ffe2a0, #ff9f1c); object-fit: cover; }
+  .budbtn small { position: absolute; bottom: 4px; left: 0; right: 0; text-shadow: 0 1px 2px var(--ink); }
+  .budbtn.on { background: conic-gradient(#7dff5a calc(var(--fill) * 360deg), rgba(20, 18, 31, 0.6) 0); border-color: var(--yellow); box-shadow: 0 6px 0 var(--ink), 0 0 24px rgba(255, 212, 0, 0.95); }
+  .budbtn.rest img { filter: grayscale(1) brightness(0.8); }
   @media (max-height: 440px) {
     #pad { width: 140px; height: 140px; }
     #pad .knob { width: 54px; height: 54px; margin: -27px; }
     .tbs { grid-template-columns: repeat(2, 70px); gap: 10px; }
     .tb { width: 70px; height: 70px; font-size: 28px; }
+    .budbtn { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 160px); }
+    .budbtn img { width: 54px; height: 54px; }
     .face { width: 48px; height: 48px; border-radius: 12px; }
     .nm { font-size: 16px; }
     .hp { height: 18px; }
@@ -234,6 +263,9 @@
   .vsbox .nm { font-size: clamp(18px, 3vw, 26px); }
   .vsbox .bl { font-size: 12px; font-weight: 700; opacity: 0.9; min-height: 1.2em; }
   .vsbox .who { position: absolute; top: -12px; left: 50%; translate: -50% 0; }
+  .vsbox .pal { display: flex; align-items: center; gap: 4px; margin-top: 2px; padding: 2px 8px 2px 2px; border-radius: 999px; background: #fff; color: var(--ink); box-shadow: 0 3px 0 var(--ink); font: 800 10px/1.1 'Rubik', sans-serif; text-align: left; }
+  .vsbox .pal img { width: 30px; height: 30px; border-radius: 50%; aspect-ratio: auto; background: radial-gradient(circle at 50% 35%, #ffe2a0, #ff9f1c); transform: none; }
+  .vsbox .pal b { display: block; font-family: var(--display); font-weight: 400; font-size: 13px; }
   .vsbox.locked { transform: scale(1.06); box-shadow: 0 0 0 4px var(--ink), 0 0 30px rgba(255, 212, 0, 0.7); border-color: var(--yellow); }
   .vsmid { font-family: var(--display); font-size: clamp(36px, 7vw, 72px); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 0 5px 0 var(--pink), 0 9px 0 var(--ink); opacity: 0.6; }
   .vsmid.go { opacity: 1; color: var(--yellow); animation: pulse 0.5s ease-in-out infinite; }
@@ -293,6 +325,7 @@
         <div class="row"><span class="nm">TEDDY</span><span class="who">1P</span><span class="wins"><i></i><i></i></span></div>
         <div class="hp"><b class="lag"></b><b class="fill"></b></div>
         <div class="sp"><b></b><span>SPECIAL</span></div>
+        <div class="bud"><img alt=""><i></i><span class="k">T</span></div>
       </div>
     </div>
     <div class="mid">
@@ -309,6 +342,7 @@
         <div class="row"><span class="nm">TOMMY</span><span class="who">CPU</span><span class="wins"><i></i><i></i></span></div>
         <div class="hp"><b class="lag"></b><b class="fill"></b></div>
         <div class="sp"><b></b><span>SPECIAL</span></div>
+        <div class="bud"><img alt=""><i></i><span class="k">T</span></div>
       </div>
     </div>
   </div>
@@ -321,6 +355,7 @@
 
 <div id="touch" class="hidden">
   <div id="pad" data-dir=""><span class="ar u">▲</span><span class="ar d">▼</span><span class="ar l">◀</span><span class="ar r">▶</span><i class="knob"></i></div>
+  <button id="budBtn" class="tb budbtn" data-act="c"><img alt=""><small>TOMMY</small></button>
   <div class="tbs">
     <button class="tb" data-act="p">👊<small>PUNCH</small></button>
     <button class="tb" data-act="k">🦶<small>KICK</small></button>
@@ -346,18 +381,19 @@
     <span>walk</span><span><kbd>A</kbd><kbd>D</kbd></span><span><kbd>←</kbd><kbd>→</kbd></span>
     <span>jump · crouch</span><span><kbd>W</kbd><kbd>S</kbd></span><span><kbd>↑</kbd><kbd>↓</kbd></span>
     <span>punch · kick · special</span><span><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></span><span><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span>
-    <span>block (or hold back)</span><span><kbd>T</kbd></span><span><kbd>I</kbd></span>
+    <span>block (or hold back)</span><span><kbd>R</kbd></span><span><kbd>I</kbd></span>
+    <span>call your brother</span><span><kbd>T</kbd></span><span><kbd>Enter</kbd></span>
   </div>
-  <p class="touch-hint">Thumb on the pad to walk, jump and crouch. 👊 punch, 🦶 kick, ⭐ special, 🛡️ block. Two players need a keyboard.</p>
+  <p class="touch-hint">Thumb on the pad to walk, jump and crouch. 👊 punch, 🦶 kick, ⭐ special, 🛡️ block, and tap your brother's face to call him in. Two players need a keyboard.</p>
   <div class="credit">built with <b>Claude Code</b></div>
 </div>
 
 <div id="select" class="screen hidden">
   <div id="selTitle" class="seltitle">PICK YOUR FIGHTER</div>
   <div class="vsrow">
-    <div class="vsbox" id="vs0"><span class="who">YOU</span><img alt=""><span class="nm"></span><span class="bl"></span></div>
+    <div class="vsbox" id="vs0"><span class="who">YOU</span><img alt=""><span class="nm"></span><span class="bl"></span><span class="pal"><img alt=""><span>+ buddy<b></b></span></span></div>
     <div id="vsMid" class="vsmid">VS</div>
-    <div class="vsbox" id="vs1"><span class="who">CPU</span><img alt=""><span class="nm"></span><span class="bl"></span></div>
+    <div class="vsbox" id="vs1"><span class="who">CPU</span><img alt=""><span class="nm"></span><span class="bl"></span><span class="pal"><img alt=""><span>+ buddy<b></b></span></span></div>
   </div>
   <div id="cards" class="cards" role="listbox" aria-label="Fighters"></div>
   <div class="selbtns">
@@ -373,7 +409,7 @@
     <button id="resumeBtn" class="btn">▶ RESUME</button>
     <button id="quitBtn" class="btn small ghost">MENU</button>
   </div>
-  <p class="hint">P · Esc · Space to resume · Q for the menu · M sound</p>
+  <p class="hint">P · Esc · Space to resume · Q for the menu · M sound · T / Enter call your brother</p>
 </div>
 
 <div id="results" class="screen hidden">

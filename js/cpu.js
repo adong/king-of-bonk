@@ -8,12 +8,13 @@
   // react: frames between plan decisions. see: frames before it notices a blow or projectile coming, then
   // block: chance to guard against it. punish: chance to hit back when you miss. aggro: chance to attack when close.
   // chain: chance to keep pressing punch for a full string. special / jump / wait: chances per decision.
+  // buddy / buddyLow: chance per decision to call its companion (more when its health is low).
   // dmg and walk are multipliers the game applies to the CPU fighter.
   const LEVELS = {
     // for Tommy (5): slow to react, blocks now and then, never strings punches, hits for 65%
-    easy: { react: 20, see: 12, block: 0.3, punish: 0.4, aggro: 0.6, chain: 0, special: 0.2, jump: 0.05, wait: 0.2, dmg: 0.65, walk: 0.85, range: 1.05 },
+    easy: { react: 20, see: 12, block: 0.3, punish: 0.4, aggro: 0.6, chain: 0, special: 0.2, jump: 0.05, wait: 0.2, dmg: 0.65, walk: 0.85, range: 1.05, buddy: 0.012, buddyLow: 0.03 },
     // for Teddy (8): quicker, guards and hits back when you miss, uses strings and specials, full damage
-    normal: { react: 15, see: 5, block: 0.4, punish: 0.5, aggro: 0.6, chain: 0.5, special: 0.3, jump: 0.12, wait: 0.12, dmg: 1, walk: 1, range: 1.2 },
+    normal: { react: 15, see: 5, block: 0.4, punish: 0.5, aggro: 0.6, chain: 0.5, special: 0.3, jump: 0.12, wait: 0.12, dmg: 1, walk: 1, range: 1.2, buddy: 0.03, buddyLow: 0.1 },
   };
 
   const rnd = Math.random;
@@ -43,6 +44,10 @@
     }
 
     function decide(M, me, foe, dist) {
+      // call the companion now and then (it doesn't use up this decision)
+      const b = me.bud;
+      if (b && !b.on && b.rest === 0 && rnd() < (me.hp < 40 ? L.buddyLow : L.buddy)) presses.push({ in: 0, b: 'c' });
+      else if (b && b.on && b.act === 'idle' && rnd() < L.buddy) presses.push({ in: 0, b: 'c' });
       const incoming = M.proj.find((p) => p.owner !== me.side && !p.spent && Math.abs(p.x - me.x) < 4.5 && Math.sign(me.x - p.x) === Math.sign(p.vx));
       if (incoming) {
         const r = rnd();
@@ -153,7 +158,8 @@
     };
   }
 
-  // A button-masher, like a small kid hammering keys: walks in and presses random buttons, never blocks.
+  // A button-masher, like a small kid hammering keys (the companion key too): walks in and presses random buttons,
+  // never blocks.
   // Only used to tune the CPU levels: it should beat Easy most of the time.
   function masher() {
     let next = 0, walking = true;
@@ -166,7 +172,7 @@
       if (--next <= 0) {
         next = 5 + rnd() * 9;
         const r = rnd();
-        inp[r < 0.55 ? 'p' : r < 0.88 ? 'k' : 's'] = true;
+        inp[r < 0.55 ? 'p' : r < 0.85 ? 'k' : r < 0.95 ? 's' : 'c'] = true;
         if (rnd() < 0.04) inp.up = true;
       }
       return inp;
@@ -189,11 +195,17 @@
       if (--next <= 0) {
         next = 15 + rnd() * 30;
         const r = rnd();
-        inp[r < 0.5 ? 'p' : r < 0.8 ? 'k' : 's'] = true;
+        inp[r < 0.5 ? 'p' : r < 0.78 ? 'k' : r < 0.95 ? 's' : 'c'] = true;
         if (rnd() < 0.15) inp.up = true;
       }
       return inp;
     };
+  }
+
+  // Frames a companion rests after a visit. 4 s, except a player facing the Easy CPU can call him right back.
+  const HUMAN = { masher: 1, kid: 1, idle: 1, human: 1 };
+  function buddyRest(me, foe) {
+    return HUMAN[me] && foe === 'easy' ? 30 : 240;
   }
 
   function modsFor(level) {
@@ -209,9 +221,9 @@
     const c1 = o.c1 || ids[Math.floor(rnd() * ids.length)], c2 = o.c2 || ids[Math.floor(rnd() * ids.length)];
     const p1 = o.p1 || 'normal', p2 = o.p2 || 'easy';
     const cap = o.maxFrames || 60 * 60 * 8;
-    const M = F.create({ chars: [c1, c2], mods: [modsFor(p1), modsFor(p2)] });
+    const M = F.create({ chars: [c1, c2], mods: [modsFor(p1), modsFor(p2)], buddyRest: o.buddyRest || [buddyRest(p1, p2), buddyRest(p2, p1)] });
     const b = [brain(p1), brain(p2)];
-    let frames = 0, error = null, hits = 0, blocks = 0, specials = 0;
+    let frames = 0, error = null, hits = 0, blocks = 0, specials = 0, calls = 0, saves = 0;
     try {
       while (M.phase !== 'over' && frames < cap) {
         M.step(b[0](M, M.f[0], M.f[1]), b[1](M, M.f[1], M.f[0]));
@@ -219,6 +231,8 @@
           if (e.type === 'hit') hits++;
           else if (e.type === 'block') blocks++;
           else if (e.type === 'special') specials++;
+          else if (e.type === 'buddy' && e.what === 'call') calls++;
+          else if (e.type === 'saved') saves++;
         }
         M.events.length = 0;
         frames++;
@@ -228,7 +242,7 @@
     }
     return {
       c1, c2, p1, p2, finished: M.phase === 'over', winner: M.winner, wins: M.wins.slice(), rounds: M.results,
-      seconds: +(frames / 60).toFixed(1), hits, blocks, specials, error,
+      seconds: +(frames / 60).toFixed(1), hits, blocks, specials, calls, saves, error,
     };
   }
 
@@ -266,5 +280,5 @@
     return { [a]: w, [b]: l, draws: d, avgRoundSeconds: +(secs / n).toFixed(1) };
   }
 
-  window.KofCPU = { brain, modsFor, LEVELS, sim, soak, versus };
+  window.KofCPU = { brain, modsFor, buddyRest, LEVELS, sim, soak, versus };
 })();

@@ -65,15 +65,44 @@
     boo: { emoji: '👻', w: 0.45, h: 0.6, y: 1.2, vx: 4.5, life: 34, dmg: 9, hs: 30, bs: 12, push: 4, kd: true, launch: 6, word: 'BOO!', big: true },
   };
 
+  // Companions (KOF-style strikers): the other brother jumps in to help, like Metro Surfer's buddy. One visit: he runs
+  // in behind his fighter, does his 'hello' move, hands over a treat halfway, does his 'goodbye' move and runs off.
+  // While he's there (GUARD frames from the call) he blocks every hit aimed at his fighter. Pressing again while he's
+  // there makes him do his move again; after he leaves he rests (opts.buddyRest frames) before he can come back.
+  const BUD = { GUARD: 300, GIVE_AT: 185, BYE_AT: 235, LEAVE_AT: 320, AGAIN_GAP: 24 };
+  // His moves, by signature pose name (Kit.roster.signature): boxing dashes in for a jab and a straight, the others
+  // throw something. Strike frames count from when he arrives next to the foe.
+  const BUD_MOVES = {
+    boxing: {
+      len: 34, dash: 9.5, strikes: [
+        { at: 4, anim: 'jab', dmg: 3, hs: 16, bs: 8, push: 2.5, hb: [0.15, 0.95, 0.9, 1.4], word: 'BOP!' },
+        { at: 16, anim: 'straight', dmg: 3, hs: 22, bs: 10, push: 4.5, hb: [0.15, 1.05, 0.9, 1.4], word: 'POW!' },
+      ],
+    },
+    jumpshot: { len: 46, hop: 7.4, spawnAt: 20, proj: 'bball', y: 1.9 },
+    peace: { len: 46, spawnAt: 14, proj: 'bpeace' },
+  };
+  PROJ.bball = { emoji: '🏀', w: 0.22, h: 0.22, g: 15, life: 150, dmg: 4, hs: 20, bs: 10, push: 4, kd: true, launch: 4, word: 'SWISH!', big: true };
+  PROJ.bpeace = { emoji: '✌️', w: 0.3, h: 0.6, y: 0.8, vx: 5.5, life: 110, dmg: 5, hs: 22, bs: 10, push: 4.5, word: 'PEACE!' };
+
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const sgn = (v) => (v > 0 ? 1 : v < 0 ? -1 : 0);
   const overlap = (a, b) => a[0] < b[1] && b[0] < a[1] && a[2] < b[3] && b[2] < a[3];
-  const blankInput = () => ({ left: false, right: false, up: false, down: false, block: false, p: false, k: false, s: false });
+  const blankInput = () => ({ left: false, right: false, up: false, down: false, block: false, p: false, k: false, s: false, c: false });
 
   // ---------------------------------------------------------------- fighters
 
-  function newFighter(side, char, mods) {
+  function newBud(info, rest) {
     return {
+      id: info.id, hello: info.hello, bye: info.bye, rest0: rest,
+      on: false, t: 0, act: '', actT: 0, x: 0, y: 0, vy: 0, facing: 1, guardLeft: 0, rest: 0,
+      given: false, byeDone: false, again: false, move: '', arrive: -1, strike: -1, hitDone: [], cheer: 0,
+    };
+  }
+
+  function newFighter(side, char, mods, bud) {
+    return {
+      bud,
       side, char, id: char.id,
       x: 0, y: 0, vx: 0, vy: 0, px: 0, facing: side === 0 ? 1 : -1,
       hp: HP, state: 'intro', t: 0,
@@ -81,7 +110,7 @@
       stun: 0, cd: 0, inv: 0, combo: 0, guard: false, threat: false,
       buf: { p: 99, k: 99, s: 99 }, held: blankInput(),
       dmgMult: (mods && mods.dmg) || 1, speedMult: (mods && mods.walk) || 1,
-      stats: { hits: 0, blocks: 0, specials: 0, maxCombo: 0, dealt: 0 },
+      stats: { hits: 0, blocks: 0, specials: 0, maxCombo: 0, dealt: 0, calls: 0, saves: 0 },
     };
   }
 
@@ -93,6 +122,7 @@
     });
     f.px = f.x;
     f.buf.p = f.buf.k = f.buf.s = 99;
+    Object.assign(f.bud, { on: false, rest: 0, again: false, act: '', guardLeft: 0, cheer: 0 });
   }
 
   function setState(f, s) {
@@ -172,6 +202,7 @@
     if (f.inv > 0) f.inv--;
     f.held = inp;
     for (const b of ['p', 'k', 's']) f.buf[b] = inp[b] ? 0 : f.buf[b] + 1;
+    if (inp.c && canAct) callBud(M, f);
     const fwd = f.facing > 0 ? inp.right : inp.left;
     const back = f.facing > 0 ? inp.left : inp.right;
     const walk = f.char.walk * f.speedMult;
@@ -385,25 +416,28 @@
 
   let projId = 0;
 
-  function spawn(M, f, foe, kind) {
+  // from: { x, y, facing } when someone other than the fighter throws it (their companion)
+  function spawn(M, f, foe, kind, from) {
     const d = PROJ[kind];
+    const o = from || { x: f.x, y: f.y + 2.25, facing: f.facing };
     const p = {
-      id: ++projId, kind, emoji: d.emoji, owner: f.side, def: d, t: 0, spent: false, dead: false,
-      x: f.x + 0.55 * f.facing, y: d.y !== undefined ? d.y : f.y + 2.25, vx: (d.vx || 0) * f.facing, vy: 0,
-      ax: (d.ax || 0) * f.facing, dir: f.facing,
+      id: ++projId, kind, emoji: d.emoji, owner: f.side, def: d, t: 0, spent: false, dead: false, bud: !!from,
+      x: o.x + 0.55 * o.facing, y: d.y !== undefined ? d.y : o.y, vx: (d.vx || 0) * o.facing, vy: 0,
+      ax: (d.ax || 0) * o.facing, dir: o.facing,
     };
-    if (kind === 'ball') {
+    if (kind === 'ball' || kind === 'bball') {
       // a jump shot: aim the arc so it drops onto the foe's chest
-      p.x = f.x + 0.2 * f.facing;
+      p.x = o.x + 0.2 * o.facing;
+      p.y = o.y;
       const tx = foe.x, ty = foe.y + 1.25;
       const dx = tx - p.x;
       const T = clamp(Math.abs(dx) / 7, 0.4, 0.9);
       p.vx = dx / T;
       p.vy = (ty - p.y + 0.5 * d.g * T * T) / T;
-      p.dir = sgn(dx) || f.facing;
+      p.dir = sgn(dx) || o.facing;
     }
     M.proj.push(p);
-    M.events.push({ type: 'spawn', side: f.side, kind, x: p.x, y: p.y });
+    M.events.push({ type: 'spawn', side: f.side, kind, x: p.x, y: p.y, bud: !!from });
   }
 
   function projStep(M) {
@@ -454,6 +488,15 @@
       pushOffWall(att, def, m, dir);
       return;
     }
+    if (guarding(def)) {
+      // his companion steps in and takes it: no damage, and the attacker bounces off
+      def.bud.cheer = 50;
+      def.stats.saves++;
+      if (att.state === 'attack' && grounded(att) && Math.abs(att.x - def.x) < 2) att.vx = -m.push * 0.7 * dir;
+      M.hitstop = Math.max(M.hitstop, 5);
+      M.events.push({ type: 'saved', side: def.side, x: at[0], y: at[1], id: def.bud.id });
+      return;
+    }
     const comboing = def.state === 'hitstun' || def.state === 'airhit';
     def.combo = comboing ? def.combo + 1 : 1;
     const scale = Math.max(0.5, 1 - 0.12 * (def.combo - 1));
@@ -493,6 +536,19 @@
       if (hu && overlap(hb, hu)) {
         const at = [(Math.max(hb[0], hu[0]) + Math.min(hb[1], hu[1])) / 2, (Math.max(hb[2], hu[2]) + Math.min(hb[3], hu[3])) / 2];
         pending.push([att, def, att.move, att.facing, at]);
+      }
+    }
+    // companions' punches
+    for (const att of M.f) {
+      const b = att.bud, def = M.f[att.side ^ 1];
+      if (!b.on || b.strike < 0 || b.hitDone[b.strike]) continue;
+      const s = BUD_MOVES[b.move].strikes[b.strike];
+      const hb = hitboxWorld(b, s.hb);
+      const hu = hurtbox(def);
+      if (hu && overlap(hb, hu)) {
+        const at = [(Math.max(hb[0], hu[0]) + Math.min(hb[1], hu[1])) / 2, (Math.max(hb[2], hu[2]) + Math.min(hb[3], hu[3])) / 2];
+        b.hitDone[b.strike] = true;
+        pending.push([att, def, s, b.facing, at]);
       }
     }
     // projectiles cancel each other out
@@ -587,6 +643,136 @@
 
   // ---------------------------------------------------------------- rounds
 
+  // ---------------------------------------------------------------- companions
+
+  const guarding = (f) => f.bud.on && f.bud.guardLeft > 0;
+
+  function callBud(M, f) {
+    const b = f.bud;
+    if (b.on) {
+      b.again = true; // he's here: do the move again as soon as he's free
+      M.events.push({ type: 'buddy', side: f.side, what: 'again', id: b.id });
+      return;
+    }
+    if (b.rest > 0) {
+      M.events.push({ type: 'buddy', side: f.side, what: 'resting', id: b.id });
+      return;
+    }
+    Object.assign(b, {
+      on: true, t: 0, act: 'enter', actT: 0, x: f.x - f.facing * 4.5, y: 0, vy: 0, facing: f.facing, guardLeft: BUD.GUARD,
+      given: false, byeDone: false, again: false, move: '', arrive: -1, strike: -1, hitDone: [], cheer: 0,
+    });
+    f.stats.calls++;
+    M.events.push({ type: 'buddy', side: f.side, what: 'call', id: b.id });
+  }
+
+  function budAct(b, act, move) {
+    b.act = act;
+    b.actT = 0;
+    b.strike = -1;
+    if (move) {
+      b.move = BUD_MOVES[move] ? move : 'peace';
+      b.arrive = -1;
+      b.hitDone = [];
+    }
+  }
+
+  // Moves him toward x at `speed` m/s; true once he's there.
+  function budWalk(b, x, speed) {
+    const d = x - b.x, step = speed * DT;
+    b.x += Math.abs(d) <= step ? d : sgn(d) * step;
+    return Math.abs(d) <= step;
+  }
+
+  function budStep(M, f, foe) {
+    const b = f.bud;
+    if (!b.on) {
+      if (b.rest > 0) b.rest--;
+      return;
+    }
+    b.t++;
+    b.actT++;
+    if (b.guardLeft > 0) b.guardLeft--;
+    if (b.cheer > 0) b.cheer--;
+    b.strike = -1;
+    const home = f.x - f.facing * 1.05; // just behind his fighter
+    const toFoe = sgn(foe.x - b.x) || f.facing;
+    b.facing = toFoe;
+    if (M.phase !== 'fight' && b.act !== 'leave') budAct(b, 'leave');
+    switch (b.act) {
+      case 'enter':
+        if (budWalk(b, home, 8) || b.actT > 60) budAct(b, 'move', b.hello);
+        break;
+      case 'idle':
+        budWalk(b, home, 4);
+        if (b.again && b.actT >= BUD.AGAIN_GAP) {
+          b.again = false;
+          budAct(b, 'move', b.hello);
+        } else if (!b.given && b.t >= BUD.GIVE_AT) budAct(b, 'give');
+        else if (!b.byeDone && b.t >= BUD.BYE_AT) {
+          b.byeDone = true;
+          budAct(b, 'move', b.bye);
+        } else if (b.t >= BUD.LEAVE_AT) budAct(b, 'leave');
+        break;
+      case 'give':
+        budWalk(b, f.x - f.facing * 0.6, 4);
+        if (b.actT === 14) {
+          b.given = true;
+          M.events.push({ type: 'treat', side: f.side, id: b.id });
+        }
+        if (b.actT >= 34) budAct(b, 'idle');
+        break;
+      case 'move': {
+        const mv = BUD_MOVES[b.move];
+        if (mv.dash) {
+          if (b.arrive < 0) {
+            if (budWalk(b, foe.x - toFoe * 0.95, mv.dash) || b.actT > 45) b.arrive = b.actT;
+          } else {
+            const k = b.actT - b.arrive;
+            mv.strikes.forEach((s, i) => { if (k > s.at && k <= s.at + 3) b.strike = i; });
+            if (k >= mv.len) budAct(b, 'return');
+          }
+        } else {
+          if (mv.hop && b.actT === 3) b.vy = mv.hop;
+          if (b.actT === mv.spawnAt) spawn(M, f, foe, mv.proj, { x: b.x, y: b.y + (mv.y || 1.2), facing: toFoe });
+          if (b.actT >= mv.len && b.y <= 0) budAct(b, 'return');
+        }
+        break;
+      }
+      case 'return':
+        if (budWalk(b, home, 7) || b.actT > 50) budAct(b, 'idle');
+        break;
+      case 'leave': {
+        const away = -(sgn(foe.x - f.x) || f.facing);
+        b.facing = away;
+        if (b.again && M.phase === 'fight') {
+          // called back on his way out: one more move, then he goes
+          b.again = false;
+          b.t = Math.min(b.t, BUD.LEAVE_AT - 70);
+          budAct(b, 'move', b.hello);
+          break;
+        }
+        b.x += away * 7 * DT;
+        if (b.actT > 55 || Math.abs(b.x) > STAGE + 4) {
+          b.on = false;
+          b.act = '';
+          b.guardLeft = 0;
+          b.rest = b.rest0;
+          M.events.push({ type: 'buddy', side: f.side, what: 'gone', id: b.id });
+        }
+        break;
+      }
+    }
+    if (b.y > 0 || b.vy > 0) {
+      b.vy -= GRAVITY * DT;
+      b.y += b.vy * DT;
+      if (b.y <= 0) {
+        b.y = 0;
+        b.vy = 0;
+      }
+    }
+  }
+
   function startRound(M) {
     M.round++;
     M.phase = 'intro';
@@ -652,6 +838,7 @@
       for (const f of M.f) {
         const inp = inputs[f.side] || blankInput();
         for (const b of ['p', 'k', 's']) if (inp[b]) f.buf[b] = 0;
+        if (inp.c && M.phase === 'fight') callBud(M, f);
         f.held = inp;
       }
       return;
@@ -675,6 +862,7 @@
     const canAct = M.phase === 'fight';
     updateThreat(M);
     for (const f of M.f) fighterStep(M, f, M.f[f.side ^ 1], canAct ? inputs[f.side] || blankInput() : blankInput(), canAct);
+    for (const f of M.f) budStep(M, f, M.f[f.side ^ 1]);
     projStep(M);
     if (M.phase === 'fight') resolveHits(M);
     else M.proj = M.proj.filter((p) => !p.dead);
@@ -692,14 +880,16 @@
       opts, f: [], proj: [], events: [], wins: [0, 0], round: 0, phase: 'intro', phaseT: 0,
       timer: ROUND_TIME * FPS, hitstop: 0, frame: 0, results: [], winner: null, roundWinner: -1, roundStart: 0,
     };
-    M.f = [0, 1].map((side) => newFighter(side, window.KofChars.get(opts.chars[side]), (opts.mods || [])[side]));
+    const rest = opts.buddyRest || [240, 240];
+    M.f = [0, 1].map((side) => newFighter(side, window.KofChars.get(opts.chars[side]), (opts.mods || [])[side],
+      newBud(window.KofChars.buddy(opts.chars[side]), rest[side])));
     startRound(M);
     M.step = (i1, i2) => step(M, [i1, i2]);
     return M;
   }
 
   window.KofFight = {
-    create, blankInput, hurtbox, hitboxWorld, moveActive,
+    create, blankInput, hurtbox, hitboxWorld, moveActive, guarding, BUD, BUD_MOVES,
     FPS, DT, HP, ROUND_TIME, STAGE, MAX_SEP, BUFFER, SPECIAL_CD, INTRO, MOVES, SPECIALS, PROJ,
   };
 })();

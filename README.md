@@ -3,11 +3,12 @@
 A King of Fighters-style cartoon fighting game starring Teddy and Tommy, in their backyard. It's built with Claude Code from plain JavaScript and Three.js, on the shared Claude Games kit.
 There are no image, model or audio files: the fighters are the kit's blocky characters, every texture is painted on a canvas, and every sound is synthesised.
 It's silly, not violent. Hits make comic POW! bursts and a bonk, a knocked-out fighter sits down dizzy under circling stars, and the winner does their signature pose.
+Either fighter can call in the other brother as a companion, KOF-striker style: he jumps in, does his signature move, hands over a treat and shields his fighter while he's there.
 
 ## Play
 
 - **Double-click `index.html`.** It works offline because Three.js and the kit are copied into `kit/`. Without internet the title font falls back to Arial Black.
-- **Send one file:** `dist/kof-teddy.html` is the whole game inlined, about 720 KB. AirDrop or email it, then open it in a browser.
+- **Send one file:** `dist/kof-teddy.html` is the whole game inlined, about 790 KB. AirDrop or email it, then open it in a browser.
 - Rebuild that file after any edit: `python3 kit/tools/bundle.py . --name kof-teddy`
 
 **1 PLAYER** is you against the computer, and **2 PLAYERS** is two kids on one keyboard. Pick the CPU level on the title screen:
@@ -25,9 +26,10 @@ It's silly, not violent. Hits make comic POW! bursts and a bonk, a knocked-out f
 | punch | F | J | 👊 |
 | kick | G | K | 🦶 |
 | special | H | L | ⭐ |
-| block | T, or hold away from your opponent | I, or hold away | 🛡️ |
+| block | R, or hold away from your opponent | I, or hold away | 🛡️ |
+| call your brother | T | Enter | tap his face (above the buttons) |
 
-- In 1-player mode both key sets control you, so arrows + J K L work too. Player 2 can also use numpad 1 2 3 0.
+- In 1-player mode both key sets control you, so arrows + J K L (and Enter for your brother) work too. Player 2 can also use numpad 1 2 3 0.
 - **P** or Esc pauses, and **M** turns the sound on or off. The ❚❚ and 🔊 buttons under the timer do the same.
 - **Menus:** on the title screen, Enter starts 1 player, 2 starts 2 players, and ← → pick the CPU level. On character select, tap a card, or use A D + F (player 1) and ← → + J (player 2). Esc goes back.
 
@@ -55,6 +57,22 @@ The signature moves:
 - **ZOMBIE**: 👻 BOO!, a short-range scare that knocks you over.
 
 When two projectiles meet, they cancel each other out with a POP.
+
+## Call your brother (companion mode)
+
+Your companion is the other brother: **Tommy** comes for everyone, and **Teddy** comes when Tommy is the fighter. Each side has its own, the CPU included. The select screen shows him under each fighter ("+ buddy TOMMY"). If both sides get Tommy, the second one wears different colours, and his name tag is in his caller's colour (blue for player 1, red for player 2).
+
+- **Calling him:** press T (player 1), Enter (player 2) or his face button on a touch screen. He runs in behind you and does his hello move:
+  - **Teddy** dashes in for a Tyson-style jab and straight (BOP! POW!), and says goodbye with a 🏀 jump shot (SWISH!).
+  - **Tommy** does his Y pose and sends out a ✌️ wave with stars, to say hello and again to say goodbye.
+  - His hits are small: 3 per punch, 4 for the basketball, 5 for the wave. They have POW stars, and the opponent can block them.
+- **Halfway through the visit** he tosses you a treat (🍦 💧 🧃 🍪 🍉 🍌, just for fun), which you hold for a few seconds. Then he does his goodbye move and runs off. A visit lasts about 6.5 s.
+- **He's got your back:** for the first 5 s after you call him, every hit aimed at you is blocked, with no damage: "TOMMY BLOCKED IT!" or "TEDDY SAVED YOU!". The attacker bounces off.
+  - The little bar with his face under your special meter shows his guard time running out. It glows while he guards, as does the touch button.
+- **Press again while he's there** and he does his move again, as soon as he's finished the one he's doing. He doesn't stay longer or guard longer because of it.
+- **Resting:** after he leaves he rests for **4 s** before you can call him again, in 2-player mode and against the Normal CPU. Against the Easy CPU it's 0.5 s, so a little one can call him right back.
+  - While he rests his face is grey and the bar refills. Pressing then just makes the bar wiggle.
+- **The CPU** calls its companion too. On Normal that's every 8 s or so, and more when it's losing. On Easy it's much less often.
 
 ## Rounds
 
@@ -88,25 +106,26 @@ kof.step(5)                        // advance 5 s and draw (when the tab's anima
 kof.debug(true)                    // show hitboxes (red), hurtboxes (green), projectiles (yellow)
 ```
 
-- At the last check:
-  - 200 random headless matches all finished, with every round ended by a KO or the timer.
-  - A button-masher bot (presses something every 0.1–0.25 s, never blocks) beat Easy in 100 of 100 matches, and beat Normal in 149 of 300.
+- At the last check, with companions in play:
+  - 200 random headless matches all finished, with every round ended by a KO.
+  - A button-masher bot (presses something every 0.1–0.25 s, the companion key included, never blocks) beat Easy in 100 of 100 matches, and beat Normal in 162 of 300.
   - A "little kid" bot (wanders, jumps a lot, presses a button every 0.25–0.75 s) beat Easy in 295 of 300, and lost to Normal every time.
-  - Rounds last about 20–30 s.
+  - Rounds last about 25–35 s.
+- `kof.buddy(0)` calls player 1's companion, and `kof.buddy(1)` calls player 2's.
 
 ## Files
 
 ```
 index.html       page, HUD, menus, touch buttons (CSS inline)
 js/chars.js      fighter table: speed, power, punch string, special, victory pose
-js/fight.js      the engine: frame data, input buffer, state machine, hitboxes, projectiles, rounds
+js/fight.js      the engine: frame data, input buffer, state machine, hitboxes, projectiles, companions, rounds
 js/cpu.js        CPU brains (easy, normal), test bots, headless sim / soak / versus
 js/input.js      keyboard for two players, touch pad and buttons
 js/poses.js      fight poses on top of Kit.people.pose
 js/stage.js      the backyard: lawn, picket fence, bunting, banner, hoop, doghouse and dog, tree, house
 js/fx.js         POW bursts, stars, dust, block shields, projectile sprites, dizzy stars, Teddy's ball
 js/sfx.js        fight sounds on top of Kit.sound
-js/game.js       scene, camera, screens, HUD, main loop, window.kof hooks
+js/game.js       scene, camera, screens, HUD, companions and treats, main loop, window.kof hooks
 kit/             copy of ~/claude-games/kit (python3 ../kit/tools/sync.py .), never edited here
 dist/kof-teddy.html   the single-page build
 PLAN.md          the build plan
@@ -125,5 +144,5 @@ These live in this game's own JS for now. They could move into `~/claude-games/k
 ## Not verified
 
 - **Sound**: the synth code runs without errors, but nobody listened to it.
-- **Real touch devices**: the touch pad and buttons were tested in the browser's phone emulation (740×360) with mouse and synthetic pointer events, not on a real phone or iPad. Two thumbs at once (pad and button) is untested.
+- **Real touch devices**: the touch pad and buttons (the companion button included) were tested in the browser's phone emulation (740×360) with mouse and synthetic pointer events, not on a real phone or iPad. Two thumbs at once (pad and button) is untested.
 - **Double-click from Finder (`file://`)**: the page only uses classic `<script src>` tags and no network requests, but it was tested over `http://localhost`, because the test browser can't drive `file://` pages.

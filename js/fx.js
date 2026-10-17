@@ -116,12 +116,15 @@
 
   // ---------------------------------------------------------------- projectiles
 
-  const PROJ_SIZE = { ball: 0.6, peace: 1.25, moon: 0.8, zap: 0.8, shock: 1.0, boo: 1.3 };
+  const PROJ_SIZE = { ball: 0.6, peace: 1.25, moon: 0.8, zap: 0.8, shock: 1.0, boo: 1.3, bball: 0.5, bpeace: 0.95 };
+  // companions throw smaller versions of the brothers' own specials
+  const STYLE_OF = { bball: 'ball', bpeace: 'peace' };
 
   function syncProjectiles(list, dt, time) {
     const seen = new Set();
     for (const p of list) {
       seen.add(p.id);
+      const kind = STYLE_OF[p.kind] || p.kind;
       let e = projSprites.get(p.id);
       if (!e) {
         const group = new T.Group();
@@ -131,7 +134,7 @@
         main.scale.set(sz, sz, 1);
         group.add(main);
         const parts = [];
-        if (p.kind === 'peace') {
+        if (kind === 'peace') {
           // Tommy's wave: the big ✌️ with stars spinning around it
           for (let i = 0; i < 4; i++) {
             const s = new T.Sprite(new T.SpriteMaterial({ map: G.emojiTexture(i % 2 ? '⭐' : '✌️'), transparent: true, depthWrite: false }));
@@ -140,27 +143,27 @@
             parts.push(s);
           }
         }
-        if (p.kind === 'zap' || p.kind === 'peace' || p.kind === 'moon') {
-          const glow = new T.Sprite(new T.SpriteMaterial({ map: G.glowTexture(), color: p.kind === 'zap' ? '#5ef2ff' : p.kind === 'moon' ? '#fff3a0' : '#ffb0e0', transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
+        if (kind === 'zap' || kind === 'peace' || kind === 'moon') {
+          const glow = new T.Sprite(new T.SpriteMaterial({ map: G.glowTexture(), color: kind === 'zap' ? '#5ef2ff' : kind === 'moon' ? '#fff3a0' : '#ffb0e0', transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
           glow.scale.set(sz * 1.6, sz * 1.6, 1);
-          glow.material.opacity = p.kind === 'peace' ? 0.55 : 0.9;
+          glow.material.opacity = kind === 'peace' ? 0.55 : 0.9;
           glow.renderOrder = -1;
           group.add(glow);
           parts.push(glow);
         }
-        e = { group, main, parts, kind: p.kind, trail: 0 };
+        e = { group, main, parts, kind, trail: 0 };
         projSprites.set(p.id, e);
       }
       e.group.position.set(p.x, p.y, 0.15);
       const m = e.main.material;
-      if (p.kind === 'ball') m.rotation -= p.vx * dt * 1.5;
-      else if (p.kind === 'moon') m.rotation += 14 * dt * p.dir;
-      else if (p.kind === 'zap') e.main.scale.setScalar(0.65 + Math.sin(time * 60) * 0.12);
-      else if (p.kind === 'boo') {
+      if (kind === 'ball') m.rotation -= p.vx * dt * 1.5;
+      else if (kind === 'moon') m.rotation += 14 * dt * p.dir;
+      else if (kind === 'zap') e.main.scale.setScalar(0.65 + Math.sin(time * 60) * 0.12);
+      else if (kind === 'boo') {
         m.rotation = Math.sin(time * 9) * 0.25;
         m.opacity = 0.9;
       }
-      if (p.kind === 'peace') {
+      if (kind === 'peace') {
         e.parts.forEach((s, i) => {
           if (i >= 4) return;
           const a = time * 6 + (i * Math.PI) / 2;
@@ -170,10 +173,10 @@
       // sparkle trails
       e.trail -= dt;
       if (e.trail <= 0 && !p.spent) {
-        e.trail = p.kind === 'shock' ? 0.05 : 0.07;
-        if (p.kind === 'shock') dust(p.x, 1, true);
-        else if (p.kind !== 'ball') {
-          const s = sprite(G.emojiTexture(p.kind === 'zap' ? '✨' : '⭐'), 0.22, p.x, p.y + (Math.random() - 0.5) * 0.4, 0.1);
+        e.trail = kind === 'shock' ? 0.05 : 0.07;
+        if (kind === 'shock') dust(p.x, 1, true);
+        else if (kind !== 'ball') {
+          const s = sprite(G.emojiTexture(kind === 'zap' ? '✨' : '⭐'), 0.22, p.x, p.y + (Math.random() - 0.5) * 0.4, 0.1);
           add(s, { kind: 'spark', life: 0.35, vy: 0.5 });
         }
       }

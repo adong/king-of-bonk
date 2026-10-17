@@ -42,6 +42,12 @@ dist/kof-teddy.html   single-page build (python3 kit/tools/bundle.py .)
   (nobody scores; at most 5 rounds, then the match is a draw). KO'd fighter sits down dizzy with circling stars;
   the winner does their signature pose.
 
+## Companions (added later, Alan's request)
+
+- The other brother (Kit.roster.buddyFor) is each fighter's striker: called with T / Enter / a touch button.
+- One visit is about 6.5 s: run in, hello move, treat at the halfway point, goodbye move, run off. He guards his fighter for 5 s,
+  then rests 4 s (0.5 s for a player against Easy). Engine-side, so it's in the headless tests.
+
 ## CPU
 
 - Reads only the public match state, re-decides every N frames (reaction time), keeps a short plan
