@@ -176,10 +176,19 @@
         g.restore();
         x += word[i] === '-' ? 34 : 48;
       }
-      g.font = `26px ${FONT}`;
-      g.fillStyle = '#4a86cf';
-      g.fillText('★ BACKYARD CHAMPIONSHIP ★', 256, 142);
-      const sheet = new T.Mesh(new T.PlaneGeometry(3.4, 1.33), new T.MeshStandardMaterial({ map: toTexture(c), transparent: true, side: T.DoubleSide, roughness: 1 }));
+      // the subtitle speaks the player's language (BONK-OFF! is the kids' painting and stays as it is)
+      const sub = () => {
+        const text = window.Kit.lang ? window.Kit.lang.t('★ BACKYARD CHAMPIONSHIP ★') : '★ BACKYARD CHAMPIONSHIP ★';
+        g.fillStyle = '#fffdf6';
+        g.fillRect(20, 118, 472, 50);
+        g.font = `26px ${FONT}`;
+        g.fillStyle = '#4a86cf';
+        g.fillText(text, 256, 142);
+      };
+      sub();
+      const tex = toTexture(c);
+      if (window.Kit.lang) window.Kit.lang.onChange(() => { sub(); tex.needsUpdate = true; });
+      const sheet = new T.Mesh(new T.PlaneGeometry(3.4, 1.33), new T.MeshStandardMaterial({ map: tex, transparent: true, side: T.DoubleSide, roughness: 1 }));
       sheet.position.set(0.6, 1.0, FENCE_Z + 0.08);
       sheet.rotation.z = 0.015;
       root.add(sheet);

@@ -17,11 +17,15 @@
     'ZOOM!': ['#18b4ff', '#ffffff', '#ff3d7f'], 'POP!': ['#ffffff', '#fff2a8', '#ff3d7f'], 'BLOCK!': ['#4aa8ff', '#d8f0ff', '#ffffff'],
   };
 
+  // The word is drawn in the current language (Kit.lang): POW! in English, 砰！ in 中文.
+  const say = (w) => (window.Kit.lang ? window.Kit.lang.t(w) : w);
+
   function burstTexture(word) {
-    if (burstCache[word]) return burstCache[word];
+    const text = say(word);
+    if (burstCache[text]) return burstCache[text];
     const { makeCanvas, toTexture, FONT } = window.Kit.gfx;
     const [c, g] = makeCanvas(256, 256);
-    const [outer, inner, text] = STYLE[word] || STYLE['POW!'];
+    const [outer, inner, ink] = STYLE[word] || STYLE['POW!'];
     const star = (r1, r2, n, fill) => {
       g.beginPath();
       for (let i = 0; i < n * 2; i++) {
@@ -39,16 +43,17 @@
     star(84, 52, 10, inner);
     g.translate(128, 132);
     g.rotate(-0.12);
-    const size = word.length > 5 ? 50 : 60;
+    let size = 60;
     g.font = `${size}px ${FONT}`;
+    while (size > 30 && g.measureText(text).width > 190) g.font = `${(size -= 4)}px ${FONT}`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.lineWidth = 10;
     g.strokeStyle = '#14121f';
-    g.strokeText(word, 0, 0);
-    g.fillStyle = text;
-    g.fillText(word, 0, 0);
-    return (burstCache[word] = toTexture(c));
+    g.strokeText(text, 0, 0);
+    g.fillStyle = ink;
+    g.fillText(text, 0, 0);
+    return (burstCache[text] = toTexture(c));
   }
 
   function sprite(tex, size, x, y, z, o = {}) {
@@ -274,6 +279,7 @@
     scene = sc;
     G = window.Kit.gfx;
     Object.keys(STYLE).forEach(burstTexture); // paint them now, not mid-fight
+    if (window.Kit.lang) window.Kit.lang.onChange(() => Object.keys(STYLE).forEach(burstTexture)); // and in the new language
   }
 
   window.KofFx = { init, pow, stars, block, dust, clash, toss, syncProjectiles, makeFighterFx, updateFighterFx, update, clear };

@@ -3,6 +3,7 @@
 [![King of Bonk! title screen](docs/screenshot.jpg)](https://adong.github.io/king-of-bonk/)
 
 Press **?** any time (or tap the round **?** button on the left edge) to see the keys. The game waits while you look.
+Tap **中文 / EN** under it to switch between English and 中文 (the dashboard and every game remember the choice).
 
 A King of Fighters-style cartoon fighting game starring Teddy and Tommy, in their backyard. It's built with Claude Code from plain JavaScript and Three.js, on the shared Claude Games kit.
 There are no image, model or audio files: the fighters are the kit's blocky characters, every texture is painted on a canvas, and every sound is synthesised.

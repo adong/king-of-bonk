@@ -60,15 +60,8 @@
     const person = Kit.people.build(alt ? altLook(entry.look) : entry.look);
     person.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     scene.add(person.root);
-    let tag = null;
-    if (who) {
-      tag = Kit.gfx.nameTag(who, who === 'CPU' ? '#ff8a8a' : side === 0 ? '#8cc2ff' : '#ffb0b0');
-      tag.scale.multiplyScalar(0.55);
-      tag.renderOrder = 15;
-      scene.add(tag);
-    }
     return {
-      id, person, entry, ch: window.KofChars.get(id), ffx: FX.makeFighterFx(), u: side === 0 ? 1 : -1, squash: 0, tag,
+      id, person, entry, ch: window.KofChars.get(id), ffx: FX.makeFighterFx(), u: side === 0 ? 1 : -1, squash: 0, tag: makeTag(who, side), who,
       hello: Kit.roster.signature(entry, 'hello'), lastCyc: 0, confettiT: 0,
     };
   }
@@ -90,6 +83,26 @@
     treat.visible = false;
     scene.add(treat);
     return { id, entry, person, tag, u: side === 0 ? 1 : -1, treat, flyT: -1, holdT: 0, from: new T.Vector3() };
+  }
+
+  // "1P" / "2P" / "CPU" over a fighter's head, drawn in the current language (CPU is 电脑 in 中文).
+  function makeTag(who, side) {
+    if (!who) return null;
+    const tag = Kit.gfx.nameTag(Kit.lang.t(who), who === 'CPU' ? '#ff8a8a' : side === 0 ? '#8cc2ff' : '#ffb0b0');
+    tag.scale.multiplyScalar(0.55);
+    tag.renderOrder = 15;
+    scene.add(tag);
+    return tag;
+  }
+
+  function relabelTags() {
+    fighters.forEach((fv, side) => {
+      if (!fv.tag) return;
+      scene.remove(fv.tag);
+      fv.tag.material.map.dispose();
+      fv.tag.material.dispose();
+      fv.tag = makeTag(fv.who, side);
+    });
   }
 
   function clearFighters() {
@@ -881,6 +894,8 @@
   }
 
   async function boot() {
+    // wait for every script (js/zh.js comes after this one), so canvas words are drawn in the right language
+    if (document.readyState === 'loading') await new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true }));
     try {
       await Promise.race([document.fonts.load('64px Bungee'), new Promise((r) => setTimeout(r, 1500))]);
     } catch (e) { /* system fonts it is */ }
@@ -917,6 +932,7 @@
     bindMenus();
     resize();
     window.addEventListener('resize', resize);
+    Kit.lang.onChange(relabelTags);
     startAttract();
     toTitle();
     $('loading').remove();
@@ -929,6 +945,8 @@
   window.kof = {
     get state() { return { screen: G.screen, phase: M && M.phase, round: M && M.round, timer: M && Math.ceil(M.timer / 60), hp: M && M.f.map((f) => f.hp), wins: M && M.wins.slice(), states: M && M.f.map((f) => f.state), attract: G.attract }; },
     get M() { return M; },
+    get scene() { return scene; },
+    get fighters() { return fighters; },
     G,
     // Advance `seconds` of game time right now, drawing every frame (works while the pane's rAF is throttled).
     step(seconds = 1) {
