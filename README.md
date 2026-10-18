@@ -1,5 +1,7 @@
 # King of Bonk
 
+[![King of Bonk! title screen](docs/screenshot.jpg)](https://adong.github.io/king-of-bonk/)
+
 A King of Fighters-style cartoon fighting game starring Teddy and Tommy, in their backyard. It's built with Claude Code from plain JavaScript and Three.js, on the shared Claude Games kit.
 There are no image, model or audio files: the fighters are the kit's blocky characters, every texture is painted on a canvas, and every sound is synthesised.
 It's silly, not violent. Hits make comic POW! bursts and a bonk, a knocked-out fighter sits down dizzy under circling stars, and the winner does their signature pose.
