@@ -1,14 +1,18 @@
-# King of Bonk
+# King of Bonk!
 
 [![King of Bonk! title screen](docs/screenshot.jpg)](https://adong.github.io/king-of-bonk/)
+
+A cartoon backyard fight: Teddy's jab-straight vs Tommy's peace wave. 1 or 2 players.
+
+**中文：** 后院卡通大乱斗：Teddy 的刺拳直拳对 Tommy 的和平波。单人或双人。
 
 Press **?** any time (or tap the round **?** button on the left edge) to see the keys. The game waits while you look.
 Tap the language button under it (the A文 icon) to switch between English and 中文; the dashboard and every game remember the choice.
 
-A King of Fighters-style cartoon fighting game starring Teddy and Tommy, in their backyard. It's built with Claude Code from plain JavaScript and Three.js, on the shared Claude Games kit.
+An arcade-style cartoon fighting game starring Teddy and Tommy, in their backyard. It's built with Claude Code from plain JavaScript and Three.js, on the shared Claude Games kit.
 There are no image, model or audio files: the fighters are the kit's blocky characters, every texture is painted on a canvas, and every sound is synthesised.
 It's silly, not violent. Hits make comic POW! bursts and a bonk, a knocked-out fighter sits down dizzy under circling stars, and the winner does their signature pose.
-Either fighter can call in the other brother as a companion, KOF-striker style: he jumps in, does his signature move, hands over a treat and shields his fighter while he's there.
+Either fighter can call in the other brother as a companion: he jumps in, does his signature move, hands over a treat and shields his fighter while he's there.
 
 ## Play
 
